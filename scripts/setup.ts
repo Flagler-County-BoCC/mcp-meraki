@@ -24,24 +24,58 @@ const TEMPLATES_DIR = path.join(ROOT, 'templates', '.claude', 'commands');
 const GLOBAL_COMMANDS_DIR = path.join(os.homedir(), '.claude', 'commands');
 const ENV_EXAMPLE = path.join(ROOT, '.env.example');
 
-function getClaudeDesktopConfigPath(): string {
+function getClaudeDesktopConfigPaths(): string[] {
   switch (process.platform) {
     case 'darwin':
-      return path.join(
-        os.homedir(),
-        'Library',
-        'Application Support',
-        'Claude',
-        'claude_desktop_config.json',
-      );
-    case 'win32':
-      return path.join(
-        process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming'),
-        'Claude',
-        'claude_desktop_config.json',
-      );
+      return [
+        path.join(
+          os.homedir(),
+          'Library',
+          'Application Support',
+          'Claude',
+          'claude_desktop_config.json',
+        ),
+      ];
+    case 'win32': {
+      // Standard installer writes to %APPDATA%\Claude. The Microsoft Store (MSIX)
+      // build is sandboxed: its %APPDATA% writes are redirected to a per-package
+      // LocalCache\Roaming dir. The package hash isn't knowable up front, so scan
+      // %LOCALAPPDATA%\Packages for the AnthropicClaude* package. Register in both.
+      const appData = process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming');
+      return [
+        path.join(appData, 'Claude', 'claude_desktop_config.json'),
+        ...findStoreDesktopConfigPaths(),
+      ];
+    }
     default:
-      return path.join(os.homedir(), '.config', 'Claude', 'claude_desktop_config.json');
+      return [path.join(os.homedir(), '.config', 'Claude', 'claude_desktop_config.json')];
+  }
+}
+
+// ponytail: scan for the MSIX package rather than hardcode its hash; covers reinstalls.
+function findStoreDesktopConfigPaths(): string[] {
+  const localAppData =
+    process.env['LOCALAPPDATA'] ?? path.join(os.homedir(), 'AppData', 'Local');
+  const packagesDir = path.join(localAppData, 'Packages');
+  if (!fs.existsSync(packagesDir)) {
+    return [];
+  }
+  try {
+    return fs
+      .readdirSync(packagesDir)
+      .filter((name) => name.startsWith('AnthropicClaude'))
+      .map((name) =>
+        path.join(
+          packagesDir,
+          name,
+          'LocalCache',
+          'Roaming',
+          'Claude',
+          'claude_desktop_config.json',
+        ),
+      );
+  } catch {
+    return [];
   }
 }
 
@@ -195,12 +229,16 @@ async function main(): Promise<void> {
     console.error('\n  Build not found. Run `npm run build` first.\n');
     process.exit(1);
   }
-  const desktopPath = getClaudeDesktopConfigPath();
+  const desktopPaths = getClaudeDesktopConfigPaths();
   const codePath = getClaudeCodeConfigPath();
-  // Seed from whichever client already has values so keys carry across both.
-  const existing = { ...existingEnvFor(codePath), ...existingEnvFor(desktopPath) };
+  // Seed from whichever client already has values so keys carry across all of them.
+  const existing = desktopPaths.reduce((acc, p) => ({ ...acc, ...existingEnvFor(p) }), {
+    ...existingEnvFor(codePath),
+  });
   const env = await collectEnv(existing);
-  registerDesktop(desktopPath, env);
+  for (const desktopPath of desktopPaths) {
+    registerDesktop(desktopPath, env);
+  }
   registerClaudeCode(codePath, env);
   installCommands();
   console.log(`\n  Binary: ${BINARY}`);

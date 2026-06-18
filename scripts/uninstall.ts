@@ -13,24 +13,55 @@ const SERVER_KEY = 'meraki-dashboard-api';
 const TEMPLATES_DIR = path.join(ROOT, 'templates', '.claude', 'commands');
 const GLOBAL_COMMANDS_DIR = path.join(os.homedir(), '.claude', 'commands');
 
-function getClaudeDesktopConfigPath(): string {
+function getClaudeDesktopConfigPaths(): string[] {
   switch (process.platform) {
     case 'darwin':
-      return path.join(
-        os.homedir(),
-        'Library',
-        'Application Support',
-        'Claude',
-        'claude_desktop_config.json',
-      );
-    case 'win32':
-      return path.join(
-        process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming'),
-        'Claude',
-        'claude_desktop_config.json',
-      );
+      return [
+        path.join(
+          os.homedir(),
+          'Library',
+          'Application Support',
+          'Claude',
+          'claude_desktop_config.json',
+        ),
+      ];
+    case 'win32': {
+      // Standard installer + sandboxed Microsoft Store (MSIX) build — clean both.
+      const appData = process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming');
+      return [
+        path.join(appData, 'Claude', 'claude_desktop_config.json'),
+        ...findStoreDesktopConfigPaths(),
+      ];
+    }
     default:
-      return path.join(os.homedir(), '.config', 'Claude', 'claude_desktop_config.json');
+      return [path.join(os.homedir(), '.config', 'Claude', 'claude_desktop_config.json')];
+  }
+}
+
+// ponytail: scan for the MSIX package rather than hardcode its hash; covers reinstalls.
+function findStoreDesktopConfigPaths(): string[] {
+  const localAppData =
+    process.env['LOCALAPPDATA'] ?? path.join(os.homedir(), 'AppData', 'Local');
+  const packagesDir = path.join(localAppData, 'Packages');
+  if (!fs.existsSync(packagesDir)) {
+    return [];
+  }
+  try {
+    return fs
+      .readdirSync(packagesDir)
+      .filter((name) => name.startsWith('AnthropicClaude'))
+      .map((name) =>
+        path.join(
+          packagesDir,
+          name,
+          'LocalCache',
+          'Roaming',
+          'Claude',
+          'claude_desktop_config.json',
+        ),
+      );
+  } catch {
+    return [];
   }
 }
 
@@ -100,7 +131,9 @@ function removeCommands(): void {
 }
 
 function main(): void {
-  deregister(getClaudeDesktopConfigPath(), 'Claude Desktop');
+  for (const desktopPath of getClaudeDesktopConfigPaths()) {
+    deregister(desktopPath, 'Claude Desktop');
+  }
   deregister(getClaudeCodeConfigPath(), 'Claude Code');
   removeCommands();
   console.log('\n  Manual steps remaining:');
