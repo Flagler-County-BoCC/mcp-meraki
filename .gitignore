@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+.env.*.local
+*.log
+*.pem
+*.key
+*.crt
+
+# Local Meraki credentials / scratch files (never commit)
+key.txt

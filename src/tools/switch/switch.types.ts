@@ -1,0 +1,15 @@
+export type {
+  GetOrganizationSwitchPortsBySwitchInput,
+  GetOrganizationSwitchPortsStatusesBySwitchInput,
+  SwitchGetPortsInput,
+  SwitchListBydeviceInput,
+  SwitchListInterfacesInput,
+  SwitchListLinkaggregationsInput,
+  SwitchListMulticastInput,
+  SwitchListOspfInput,
+  SwitchListPortsInput,
+  SwitchListStacksInput,
+  SwitchListStaticroutesInput,
+  SwitchListStatusesInput,
+  SwitchListStpInput,
+} from './switch.schema.js';
