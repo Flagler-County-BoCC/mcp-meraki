@@ -49,7 +49,9 @@ function findStoreDesktopConfigPaths(): string[] {
   try {
     return fs
       .readdirSync(packagesDir)
-      .filter((name) => name.startsWith('AnthropicClaude'))
+      // Package family name varies by build/publisher: AnthropicClaude_<hash>,
+      // claude_<hash>, etc. Match any folder containing "claude" (case-insensitive).
+      .filter((name) => name.toLowerCase().includes('claude'))
       .map((name) =>
         path.join(
           packagesDir,

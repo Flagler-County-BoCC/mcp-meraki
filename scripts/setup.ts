@@ -40,7 +40,7 @@ function getClaudeDesktopConfigPaths(): string[] {
       // Standard installer writes to %APPDATA%\Claude. The Microsoft Store (MSIX)
       // build is sandboxed: its %APPDATA% writes are redirected to a per-package
       // LocalCache\Roaming dir. The package hash isn't knowable up front, so scan
-      // %LOCALAPPDATA%\Packages for the AnthropicClaude* package. Register in both.
+      // %LOCALAPPDATA%\Packages for the Claude package folder. Register in both.
       const appData = process.env['APPDATA'] ?? path.join(os.homedir(), 'AppData', 'Roaming');
       return [
         path.join(appData, 'Claude', 'claude_desktop_config.json'),
@@ -63,7 +63,9 @@ function findStoreDesktopConfigPaths(): string[] {
   try {
     return fs
       .readdirSync(packagesDir)
-      .filter((name) => name.startsWith('AnthropicClaude'))
+      // Package family name varies by build/publisher: AnthropicClaude_<hash>,
+      // claude_<hash>, etc. Match any folder containing "claude" (case-insensitive).
+      .filter((name) => name.toLowerCase().includes('claude'))
       .map((name) =>
         path.join(
           packagesDir,
